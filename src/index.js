@@ -1,8 +1,8 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
 import { combineReducers, createStore } from 'redux';
+import { Provider, connect } from 'react-redux';
 import './index.css';
-import App from './App';
 import * as serviceWorker from './serviceWorker';
 
 
@@ -87,20 +87,16 @@ const store = createStore(rootReducer);
 
 // view layer
 
-function TodoApp({ todos, onToggleTodo }) {
-  return <TodoList
-    todos={todos}
-    onToggleTodo={onToggleTodo}
-  />;
+function TodoApp() {
+  return <ConnectedTodoList />
 }
 
-function TodoList({ todos, onToggleTodo }) { 
+function TodoList({ todos }) { 
   return (
     <div>
-      {todos.map(todo => <TodoItem
+      {todos.map(todo => <ConnectedTodoItem
         key={todo.id}
         todo={todo}
-        onToggleTodo={onToggleTodo}
       />)} 
     </div>
   ); 
@@ -120,20 +116,28 @@ function TodoItem({ todo, onToggleTodo }) {
     </div> 
   );
 }
-  
-function render() {
-  ReactDOM.render(
-    <TodoApp 
-      todos={store.getState().todoState}
-      onToggleTodo={id => store.dispatch(doToggleTodo(id))} 
-    />, 
-    document.getElementById('root')
-  );
+
+function mapStateToProps(state) {
+  return {
+    todos: state.todoState,
+  };
 }
 
-store.subscribe(render);
-render();
+function mapDispatchToProps(dispatch) {
+  return {
+    onToggleTodo: id => dispatch(doToggleTodo(id)),
+  };
+}
 
+const ConnectedTodoList = connect(mapStateToProps, mapDispatchToProps)(TodoList);
+const ConnectedTodoItem = connect(mapStateToProps, mapDispatchToProps)(TodoItem);
+
+ReactDOM.render(
+  <Provider store={store}>
+    <TodoApp />
+  </Provider>, 
+  document.getElementById('root')
+);
 
 
 // If you want your app to work offline and load faster, you can change
