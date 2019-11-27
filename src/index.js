@@ -1,44 +1,75 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
-import { combineReducers, createStore } from 'redux';
+import { applyMiddleware, combineReducers, createStore } from 'redux';
 import { Provider, connect } from 'react-redux';
+import { createLogger } from 'redux-logger';
+import { schema, normalize } from 'normalizr';
+import uuid from 'uuid/v4';
 import './index.css';
 import * as serviceWorker from './serviceWorker';
 
 
+// filters
+
+const VISIBILITY_FILTERS = {
+  SHOW_COMPLETED: item => item.completed,
+  SHOW_INCOMPLETED: item => !item.completed,
+  SHOW_ALL: item => true,
+};
+
+// schemas
+
+const todoSchema = new schema.Entity('todo');
+
 // action types
-const TODO_ADD = 'TODO_ADD'; 
-const TODO_TOGGLE = 'TODO_TOGGLE'; 
+
+const TODO_ADD = 'TODO_ADD';
+const TODO_TOGGLE = 'TODO_TOGGLE';
 const FILTER_SET = 'FILTER_SET';
 
 // reducers
-const todos = [
-  { id: '0', name: 'learn redux' }, 
-  { id: '1', name: 'learn mobx' },
-];
 
-function todoReducer(state = todos, action) {
-  console.log("Todo")
-  switch (action.type) {
-    case TODO_ADD: {
+const todos = [
+  { id: uuid(), name: 'Redux Standalone with advanced Actions' }, 
+  { id: uuid(), name: 'Redux Standalone with advanced Reducers' }, 
+  { id: uuid(), name: 'Bootstrap App with Redux' },
+  { id: uuid(), name: 'Naive Todo with React and Redux' },
+  { id: uuid(), name: 'Sophisticated Todo with React and Redux' }, 
+];
+  
+
+const normalizedTodos = normalize(todos, [todoSchema]);
+
+const initialTodoState = {
+  entities: normalizedTodos.entities.todo,
+  ids: normalizedTodos.result,
+};
+
+function todoReducer(state = initialTodoState, action) {
+  switch(action.type) {
+    case TODO_ADD : {
       return applyAddTodo(state, action);
     }
-    case TODO_TOGGLE: {
+    case TODO_TOGGLE : {
       return applyToggleTodo(state, action);
     }
-    default: return state;
+    default : return state;
   }
 }
 
 function applyAddTodo(state, action) {
-  const todo = Object.assign({}, action.todo, { completed: false });
-  return state.concat(todo);
+  const todo = { ...action.todo, completed: false };
+  const entities = { ...state.entities, [todo.id]: todo };
+  const ids = [ ...state.ids, action.todo.id ];
+  return { ...state, entities, ids };
 }
 
 function applyToggleTodo(state, action) {
-  return state.map(todo => (
-    todo.id === action.todo.id ? Object.assign({}, todo, { completed: !todo.completed }) : todo
-  ));
+  const id = action.todo.id;
+  const todo = state.entities[id];
+  const toggledTodo = { ...todo, completed: !todo.completed };
+  const entities = { ...state.entities, [id]: toggledTodo };
+  return { ...state, entities };
 }
 
 function filterReducer(state = 'SHOW_ALL', action) {
@@ -46,17 +77,17 @@ function filterReducer(state = 'SHOW_ALL', action) {
     case FILTER_SET : {
       return applySetFilter(state, action);
     }
-    default : return state; 
+    default : return state;
   }
 }
 
-function applySetFilter(state, action) { 
+function applySetFilter(state, action) {
   return action.filter;
 }
 
 // action creators
 
-function doAddTodo(id, name) { 
+function doAddTodo(id, name) {
   return {
     type: TODO_ADD,
     todo: { id, name },
@@ -72,70 +103,177 @@ function doToggleTodo(id) {
 
 function doSetFilter(filter) {
   return {
-    type: FILTER_SET, 
+    type: FILTER_SET,
     filter,
   };
 }
 
+// selectors
+
+function getTodosAsIds(state) {
+  return state.todoState.ids
+    .map(id => state.todoState.entities[id])
+    .filter(VISIBILITY_FILTERS[state.filterState])
+    .map(todo => todo.id);
+}
+
+function getTodo(state, todoId) {
+  return state.todoState.entities[todoId];
+}
+
 // store
-const rootReducer = combineReducers({ 
-  todoState: todoReducer, 
+
+const rootReducer = combineReducers({
+  todoState: todoReducer,
   filterState: filterReducer,
 });
 
-const store = createStore(rootReducer);
+const logger = createLogger();
 
-// view layer
+const store = createStore(
+  rootReducer,
+  undefined,
+  applyMiddleware(logger)
+);
+
+// components
 
 function TodoApp() {
-  return <ConnectedTodoList />
-}
-
-function TodoList({ todos }) { 
   return (
     <div>
-      {todos.map(todo => <ConnectedTodoItem
-        key={todo.id}
-        todo={todo}
-      />)} 
+      <ConnectedFilter />
+      <ConnectedTodoCreate />
+      <ConnectedTodoList />
     </div>
-  ); 
+  );
 }
 
-function TodoItem({ todo, onToggleTodo }) { 
-  const { name, id, completed } = todo; 
+function Filter({ onSetFilter }) {
   return (
-    <div> 
+    <div>
+      Show
+      <button
+        type="text"
+        onClick={() => onSetFilter('SHOW_ALL')}>
+        All</button>
+      <button
+        type="text"
+        onClick={() => onSetFilter('SHOW_COMPLETED')}>
+        Completed</button>
+      <button
+        type="text"
+        onClick={() => onSetFilter('SHOW_INCOMPLETED')}>
+        Incompleted</button>
+    </div>
+  );
+}
+
+class TodoCreate extends React.Component {
+  constructor(props) {
+    super(props);
+
+    this.state = {
+      value: '',
+    };
+
+    this.onCreateTodo = this.onCreateTodo.bind(this);
+    this.onChangeName = this.onChangeName.bind(this);
+  }
+
+  onChangeName(event) {
+    this.setState({ value: event.target.value });
+  }
+
+  onCreateTodo(event) {
+    this.props.onAddTodo(this.state.value);
+    this.setState({ value: '' });
+    event.preventDefault();
+  }
+
+  render() {
+    return (
+      <div>
+        <form onSubmit={this.onCreateTodo}>
+          <input
+            type="text"
+            placeholder="Add Todo..."
+            value={this.state.value}
+            onChange={this.onChangeName}
+          />
+          <button type="submit">Add</button>
+        </form>
+      </div>
+    );
+  }
+}
+
+function TodoList({ todosAsIds }) {
+  return (
+    <div>
+      {todosAsIds.map(todoId => <ConnectedTodoItem
+        key={todoId}
+        todoId={todoId}
+      />)}
+    </div>
+  );
+}
+
+function TodoItem({ todo, onToggleTodo }) {
+  const { name, id, completed } = todo;
+  return (
+    <div>
       {name}
       <button
         type="button"
         onClick={() => onToggleTodo(id)}
       >
         {completed ? "Incomplete" : "Complete"}
-      </button>
-    </div> 
+    </button>
+    </div>
   );
 }
 
-function mapStateToProps(state) {
+// Connecting React and Redux
+
+function mapStateToPropsList(state) {
   return {
-    todos: state.todoState,
+    todosAsIds: getTodosAsIds(state),
   };
 }
 
-function mapDispatchToProps(dispatch) {
+function mapStateToPropsItem(state, props) {
   return {
-    onToggleTodo: id => dispatch(doToggleTodo(id)),
+     todo: getTodo(state, props.todoId),
   };
 }
 
-const ConnectedTodoList = connect(mapStateToProps, mapDispatchToProps)(TodoList);
-const ConnectedTodoItem = connect(mapStateToProps, mapDispatchToProps)(TodoItem);
+function mapDispatchToPropsItem(dispatch) {
+  return {
+     onToggleTodo: id => dispatch(doToggleTodo(id)),
+  };
+}
+
+function mapDispatchToPropsCreate(dispatch) {
+  return {
+    onAddTodo: name => dispatch(doAddTodo(uuid(), name)),
+  };
+}
+
+function mapDispatchToPropsFilter(dispatch) {
+  return {
+    onSetFilter: filterType => dispatch(doSetFilter(filterType)),
+  };
+}
+
+const ConnectedTodoList = connect(mapStateToPropsList)(TodoList);
+const ConnectedTodoItem = connect(mapStateToPropsItem, mapDispatchToPropsItem)(TodoItem);
+const ConnectedTodoCreate = connect(null, mapDispatchToPropsCreate)(TodoCreate);
+const ConnectedFilter = connect(null, mapDispatchToPropsFilter)(Filter);
 
 ReactDOM.render(
   <Provider store={store}>
     <TodoApp />
-  </Provider>, 
+  </Provider>,
   document.getElementById('root')
 );
 
