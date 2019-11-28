@@ -5,7 +5,7 @@ import { Provider, connect } from 'react-redux';
 import { createLogger } from 'redux-logger';
 import { schema, normalize } from 'normalizr';
 import uuid from 'uuid/v4';
-import thunk from 'redux-thunk';
+import { put, delay, takeEvery } from 'redux-saga/effects';
 import './index.css';
 import * as serviceWorker from './serviceWorker';
 
@@ -28,6 +28,7 @@ const TODO_ADD = 'TODO_ADD';
 const TODO_TOGGLE = 'TODO_TOGGLE';
 const FILTER_SET = 'FILTER_SET';
 const NOTIFICATION_HIDE = 'NOTIFICATION_HIDE';
+const TODO_ADD_WITH_NOTIFICATION = 'TODO_ADD_WITH_NOTIFICATION';
 
 // reducers
 
@@ -144,14 +145,21 @@ function doHideNotification(id) {
 }
 
 function doAddTodoWithNotification(id, name) { 
-  return function (dispatch) {
-    dispatch(doAddTodo(id, name));
-
-    setTimeout(function () { 
-      dispatch(doHideNotification(id));
-    }, 5000); 
-  }
+  return {
+    type: TODO_ADD_WITH_NOTIFICATION,
+    todo: { id, name },
+  };
 }
+
+// function doAddTodoWithNotification(id, name) { 
+//   return function (dispatch) {
+//     dispatch(doAddTodo(id, name));
+
+//     setTimeout(function () { 
+//       dispatch(doHideNotification(id));
+//     }, 5000); 
+//   }
+// }
 
 // selectors
 
@@ -172,6 +180,20 @@ function getNotifications(state) {
 
 function getArrayOfObject(object) {
   return Object.keys(object).map(key => object[key]);
+}
+
+// saga
+
+function* watchAddTodoWithNotification() {
+  yield takeEvery(TODO_ADD_WITH_NOTIFICATION, handleAddTodoWithNotification);
+}
+
+function* handleAddTodoWithNotification(action) {
+  const { todo } = action;
+  const { id, name } = todo;
+  yield put(doAddTodo(id, name));
+  yield delay(5000);
+  yield put(doHideNotification(id));
 }
 
 // store
