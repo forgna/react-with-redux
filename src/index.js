@@ -5,6 +5,7 @@ import { Provider, connect } from 'react-redux';
 import { createLogger } from 'redux-logger';
 import { schema, normalize } from 'normalizr';
 import uuid from 'uuid/v4';
+import createSagaMiddleware from 'redux-saga';
 import { put, delay, takeEvery } from 'redux-saga/effects';
 import './index.css';
 import * as serviceWorker from './serviceWorker';
@@ -205,12 +206,15 @@ const rootReducer = combineReducers({
 });
 
 const logger = createLogger();
+const saga = createSagaMiddleware();
 
 const store = createStore(
   rootReducer,
   undefined,
-  applyMiddleware(thunk, logger)
+  applyMiddleware(saga, logger)
 );
+
+saga.run(watchAddTodoWithNotification);
 
 // components
 
